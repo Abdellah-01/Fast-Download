@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-bg: #ffffff;
+            --secondary-bg: #f9f9f9;
+            --text-color: #0f0f0f;
+            --accent-color: #ff0000;
+            --accent-dark: #cc0000;
+            --border-color: #e0e0e0;
+            --gray-text: #606060;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        h1 {
+            color: var(--accent-color);
+            text-align: center;
+            font-size: 2.75rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+        }
+
+        h2,
+        h3 {
+            color: var(--accent-color);
+            font-weight: 500;
+        }
+
+        .download-form {
+            background-color: var(--secondary-bg);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0;
+            font-size: 1rem;
+        }
+
+        .btn {
+            background-color: var(--accent-color);
+            color: #fff;
+            border: none;
+            padding: 0.75rem 1.25rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            border-radius: 0;
+            margin-top: 1rem;
+            margin-right: 0.5rem;
+        }
+
+        .btn:hover {
+            background-color: var(--accent-dark);
+        }
+
+        .btn.secondary {
+            background-color: #606060;
+        }
+
+        .btn.audio {
+            background-color: #8b0000;
+        }
+
+        .format-options {
+            margin: 1rem 0;
+        }
+
+        .format-option {
+            margin-bottom: 0.5rem;
+            display: block;
+            color: var(--gray-text);
+        }
+
+        .thumbnail {
+            max-width: 100%;
+            height: auto;
+            margin: 1rem 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: var(--accent-color);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            max-width: 300px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .modal.error {
+            background-color: #d32f2f;
+        }
+
+        .close-modal {
+            float: right;
+            cursor: pointer;
+            margin-left: 1rem;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .btn {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 0.5rem;
+            }
+
+            .url-input {
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>YouTube Video Downloader</h1>
+
+        {% if error %}
+        <div id="errorModal" class="modal error">
+            <span class="close-modal" onclick="this.parentElement.style.display='none'">×</span>
+            {{ error }}
+        </div>
+        {% endif %}
+
+        {% if video_info %}
+        <div id="successModal" class="modal">
+            <span class="close-modal" onclick="this.parentElement.style.display='none'">×</span>
+            Video info loaded successfully
+        </div>
+        {% endif %}
+
+        <form method="POST" class="download-form" id="mainForm">
+            <input type="text" name="url" class="url-input" placeholder="Paste YouTube URL here..." required
+                value="{{ request.form.url if request.method == 'POST' and error else '' }}">
+            <div>
+                <button type="submit" class="btn">Fetch Video</button>
+                {% if video_info or error %}
+                <button type="button" class="btn secondary" onclick="resetForm()">Reset</button>
+                {% endif %}
+            </div>
+        </form>
+
+        {% if video_info and not error %}
+        <div class="video-info">
+            <h2>{{ video_info.title }}</h2>
+            {% if video_info.thumbnail %}
+            <img src="{{ video_info.thumbnail }}" class="thumbnail" alt="Video thumbnail">
+            {% endif %}
+
+            <form method="POST" action="/download" class="download-form">
+                <input type="hidden" name="url" value="{{ video_info.url }}">
+
+                {% if video_info.video_formats %}
+                <div class="format-section">
+                    <h3>Video Formats</h3>
+                    <div class="format-options">
+                        {% for fmt in video_info.video_formats %}
+                        <label class="format-option">
+                            <input type="radio" name="format_id" value="{{ fmt.format_id }}" required>
+                            {{ fmt.resolution or fmt.height ~ "p" }} - {{ (fmt.filesize or 0) // 1048576 }} MB
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if video_info.audio_formats %}
+                <div class="format-section">
+                    <h3>Audio Formats</h3>
+                    <div class="format-options">
+                        {% for fmt in video_info.audio_formats %}
+                        <label class="format-option">
+                            <input type="radio" name="format_id" value="{{ fmt.format_id }}" required>
+                            Audio ({{ fmt.audio_ext or "mp3" }}) - {{ (fmt.filesize or 0) // 1048576 }} MB
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <button type="submit" class="btn">Download</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const errorModal = document.getElementById('errorModal');
+            const successModal = document.getElementById('successModal');
+
+            if (errorModal) {
+                errorModal.style.display = 'block';
+                setTimeout(() => errorModal.style.display = 'none', 5000);
+            }
+
+            if (successModal) {
+                successModal.style.display = 'block';
+                setTimeout(() => successModal.style.display = 'none', 3000);
+            }
+        });
+
+        function resetForm() {
+            document.getElementById('mainForm').reset();
+            window.location.href = "/";
+        }
+    </script>
+</body>
+
+</html>

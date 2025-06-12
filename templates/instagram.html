@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Downloader</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --gradient-start: #f09433;
+            --gradient-middle: #e6683c;
+            --gradient-end: #dc2743;
+            --text-color: #262626;
+            --bg-color: #fafafa;
+            --secondary-bg: #fff;
+            --border-color: #dbdbdb;
+            --error-color: #ed4956;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 2rem;
+        }
+
+        h1 {
+            background: linear-gradient(to right, var(--gradient-start), var(--gradient-middle), var(--gradient-end));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            text-align: center;
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+
+        h2,
+        h3 {
+            color: var(--gradient-end);
+            font-weight: 600;
+        }
+
+        .download-form {
+            background-color: var(--secondary-bg);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+            border-radius: 0;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            font-size: 1rem;
+            outline: none;
+            border-radius: 0;
+        }
+
+        .btn {
+            background: linear-gradient(to right, var(--gradient-start), var(--gradient-middle), var(--gradient-end));
+            color: white;
+            border: none;
+            padding: 0.9rem 2rem;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn.secondary {
+            background: #999;
+        }
+
+        .format-option {
+            margin-bottom: 0.7rem;
+            display: block;
+        }
+
+        .format-section {
+            margin-top: 2rem;
+        }
+
+        .thumbnail {
+            max-width: 100%;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--gradient-end);
+            color: #fff;
+            padding: 1rem 1.5rem;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            border-radius: 0;
+            max-width: 300px;
+        }
+
+        .modal.error {
+            background-color: var(--error-color);
+        }
+
+        .close-modal {
+            float: right;
+            cursor: pointer;
+            margin-left: 1rem;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+
+            .url-input,
+            .btn {
+                width: 100%;
+                margin-bottom: 1rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Instagram Video Downloader</h1>
+
+        <!-- Error Modal -->
+        {% if error %}
+        <div id="errorModal" class="modal error">
+            <span class="close-modal" onclick="this.parentElement.style.display='none'">×</span>
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Success Modal -->
+        {% if video_info %}
+        <div id="successModal" class="modal">
+            <span class="close-modal" onclick="this.parentElement.style.display='none'">×</span>
+            Video info loaded successfully
+        </div>
+        {% endif %}
+
+        <form method="POST" class="download-form" id="mainForm">
+            <input type="text" name="url" class="url-input" placeholder="Paste Instagram URL here..." required
+                value="{{ request.form.url if request.method == 'POST' and error else '' }}">
+            <div style="margin-top: 1rem;">
+                <button type="submit" class="btn">Fetch Video</button>
+                {% if video_info or error %}
+                <button type="button" class="btn secondary" onclick="resetForm()">Reset</button>
+                {% endif %}
+            </div>
+        </form>
+
+        {% if video_info and not error %}
+        <div class="video-info">
+            <h2>{{ video_info.title }}</h2>
+            {% if video_info.thumbnail %}
+            <img src="{{ video_info.thumbnail }}" class="thumbnail" alt="Video thumbnail">
+            {% endif %}
+
+            <form method="POST" action="/download" class="download-form">
+                <input type="hidden" name="url" value="{{ video_info.url }}">
+                <input type="hidden" name="source" value="instagram">
+
+                {% if video_info.video_formats %}
+                <div class="format-section">
+                    <h3>Video Formats (with audio)</h3>
+                    <div class="format-options">
+                        {% for fmt in video_info.video_formats %}
+                        <label class="format-option">
+                            <input type="radio" name="format_id" value="{{ fmt.format_id }}" required>
+                            {% if fmt.height %} {{ fmt.height }}p - {% endif %}
+                            {{ (fmt.filesize or 0) // 1048576 }} MB
+                            ({{ fmt.ext }})
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if video_info.audio_formats %}
+                <div class="format-section">
+                    <h3>Audio Only Formats</h3>
+                    <div class="format-options">
+                        {% for fmt in video_info.audio_formats %}
+                        <label class="format-option">
+                            <input type="radio" name="format_id" value="{{ fmt.format_id }}">
+                            Audio ({{ fmt.abr }}kbps) -
+                            {{ (fmt.filesize or 0) // 1048576 }} MB
+                            ({{ fmt.ext }})
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <button type="submit" class="btn">Download</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const errorModal = document.getElementById('errorModal');
+            const successModal = document.getElementById('successModal');
+
+            if (errorModal) {
+                errorModal.style.display = 'block';
+                setTimeout(() => {
+                    errorModal.style.display = 'none';
+                }, 5000);
+            }
+
+            if (successModal) {
+                successModal.style.display = 'block';
+                setTimeout(() => {
+                    successModal.style.display = 'none';
+                }, 3000);
+            }
+        });
+
+        function resetForm() {
+            document.getElementById('mainForm').reset();
+            window.location.href = "/";
+        }
+    </script>
+</body>
+
+</html>
